@@ -3,7 +3,7 @@
 #include <esp_now.h>
 #include <AccelStepper.h>
 #include <SPI.h>
-#include <HardwareSerial.h> // For Serial2
+#include <HardwareSerial.h>
 
 // Configure Mac Address (Placeholder)
 uint8_t CONTROLLER_MAC_ADDR[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}; 
@@ -11,12 +11,10 @@ uint8_t CONTROLLER_MAC_ADDR[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
 // Pin Assignments
 const int STEPPER_DIR_PIN = 18;
 const int STEPPER_STEP_PIN = 19;
-// const int STEPPER_ENABLE_PIN = 21; // Optional
 
-const int RELAY_PIN = 22;           // Controls the main thruster motor
+const int RELAY_PIN = 22;         
 
-// Thruster's own Serial Encoder Pins (Using HSPI pins as an example)
-const int THRUSTER_ENC_CS_PIN = 15;  // Chip Select for thruster's encoder
+const int THRUSTER_ENC_CS_PIN = 15;  // Chip Select
 const int THRUSTER_ENC_SCK_PIN = 14; // HSPI SCK
 const int THRUSTER_ENC_MISO_PIN = 12;// HSPI MISO
 
@@ -24,45 +22,44 @@ const int THRUSTER_ENC_MISO_PIN = 12;// HSPI MISO
 const int BMS_RX_PIN = 16; // RXD2
 const int BMS_TX_PIN = 17; // TXD2
 
-// Stepper Motor Settings (Adjust for your motor/driver)
+// Stepper Motor Settings
 const int STEPPER_INTERFACE_TYPE = AccelStepper::DRIVER; 
-const int STEPS_PER_REVOLUTION = 200; // Steps per full motor revolution
-const float DEGREES_PER_STEP = 360.0 / STEPS_PER_REVOLUTION;
-const float STEPPER_MAX_SPEED = 1000.0;   // Steps per second
-const float STEPPER_ACCELERATION = 500.0; // Steps per second squared
+const int STEPS_PER_REVOLUTION = 200;
+const float DEGREES_PER_STEP = 360.0 
+const float STEPPER_MAX_SPEED = 1000.0;  
+const float STEPPER_ACCELERATION = 500.0; 
 
 // Thruster Encoder Settings
-const int THRUSTER_ENCODER_RESOLUTION = 1024; // 10-bit
-const float THRUSTER_DEGREES_PER_COUNT = 360.0 / THRUSTER_ENCODER_RESOLUTION;
+const int THRUSTER_ENCODER_RESOLUTION = 1024; 
+const float THRUSTER_DEGREES_PER_COUNT = 360.0 
 
 // Thruster Control Settings
-const float ANGLE_TOLERANCE_DEGREES = 3.6; // +/- 1% of 360 degrees tolerance
+const float ANGLE_TOLERANCE_DEGREES = 3.6;
 
 // JBD BMS Settings
-HardwareSerial BMS_Serial(2); // Use UART2 (Serial2)
+HardwareSerial BMS_Serial(2); 
 const long BMS_BAUD_RATE = 9600;
-const unsigned long BMS_QUERY_INTERVAL_MS = 5000; // How often to query BMS
-const unsigned long BMS_RESPONSE_TIMEOUT_MS = 100; // Max time to wait for BMS response
-const int LOW_BATTERY_PERCENT_THRESHOLD = 20; // Low battery threshold
+const unsigned long BMS_QUERY_INTERVAL_MS = 5000; 
+const unsigned long BMS_RESPONSE_TIMEOUT_MS = 100; 
+const int LOW_BATTERY_PERCENT_THRESHOLD = 20;
 
 // JBD Protocol Constants
 const uint8_t JBD_START_BYTE = 0xDD;
 const uint8_t JBD_END_BYTE = 0x77;
 const uint8_t JBD_READ_CMD = 0xA5;
 const uint8_t JBD_WRITE_CMD = 0x5A;
-const uint8_t JBD_CMD_BASIC_INFO = 0x03; // Command to get RSOC, Voltage, Current etc.
-const uint8_t JBD_CMD_CELL_INFO = 0x04;  // Command to get cell voltages
-const int JBD_BASIC_INFO_RSOC_INDEX = 23; // Index of RSOC byte in the data payload of 0x03 response
+const uint8_t JBD_CMD_BASIC_INFO = 0x03; 
+const uint8_t JBD_CMD_CELL_INFO = 0x04;  
+const int JBD_BASIC_INFO_RSOC_INDEX = 23;
 
 // Communication Settings
-const unsigned long PING_INTERVAL_MS = 500;       // Interval to send feedback
-const unsigned long CONNECTION_TIMEOUT_MS = 2000; // Time before considering disconnected
+const unsigned long PING_INTERVAL_MS = 500;      
+const unsigned long CONNECTION_TIMEOUT_MS = 2000; 
 
-// SPI Settings for Thruster Encoder (Adjust based on your encoder datasheet)
-SPISettings thrusterEncoderSPISettings(1000000, MSBFIRST, SPI_MODE0); // 1 MHz, MSB first, Mode 0
-SPIClass spiThruster = SPIClass(HSPI); // Use HSPI peripheral
+// SPI Settings for Stepper Encoder 
+SPISettings thrusterEncoderSPISettings(1000000, MSBFIRST, SPI_MODE0); 
+SPIClass spiThruster = SPIClass(HSPI);
 
-// --- Global Variables ---
 AccelStepper stepper(STEPPER_INTERFACE_TYPE, STEPPER_STEP_PIN, STEPPER_DIR_PIN);
 
 // Data structure to receive
@@ -88,28 +85,21 @@ volatile unsigned long lastReceiveTime = 0;
 unsigned long lastSendTime = 0;
 unsigned long lastBmsQueryTime = 0;
 
-bool currentThrustState = false; // Actual state of the relay/thruster
-bool lowBatteryState = false;   // Updated via BMS
+bool currentThrustState = false; 
+bool lowBatteryState = false;  
 
 // Buffer for BMS response
-uint8_t bmsResponseBuffer[64]; // Adjust size if needed, 64 should be enough for basic info
-
-// --- ESP-NOW Callbacks --- (Identical to previous version)
+uint8_t bmsResponseBuffer[64]; 
 
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    // Optional: Add debug printing
-    // Serial.print("Feedback Send Status: ");
-    // Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-}
 
 // Callback when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   if (len == sizeof(controllerCommand)) {
     memcpy(&controllerCommand, incomingData, sizeof(controllerCommand));
     
-    // Update volatile state variables safely
-    noInterrupts(); // Prevent race conditions
+    noInterrupts();
     receivedTargetAngle = controllerCommand.target_angle_degrees;
     receivedThrustRequest = controllerCommand.thrust_enabled_request;
     lastReceiveTime = millis();
@@ -125,36 +115,31 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   }
 }
 
-// --- Thruster Serial Encoder Reading --- (Identical to previous version)
-// IMPORTANT: Adapt to your encoder's specific SPI protocol.
 float readThrusterEncoderAngle() {
     uint16_t rawData = 0;
     
     spiThruster.beginTransaction(thrusterEncoderSPISettings);
-    digitalWrite(THRUSTER_ENC_CS_PIN, LOW); // Select encoder chip
-    rawData = spiThruster.transfer16(0xFFFF); // Send dummy data to receive
-    digitalWrite(THRUSTER_ENC_CS_PIN, HIGH); // Deselect encoder chip
+    digitalWrite(THRUSTER_ENC_CS_PIN, LOW);
+    rawData = spiThruster.transfer16(0xFFFF);
+    digitalWrite(THRUSTER_ENC_CS_PIN, HIGH); 
     spiThruster.endTransaction();
 
-    int position = rawData & 0x03FF; // Mask for lower 10 bits (0 to 1023)
+    int position = rawData & 0x03FF; 
     float angle = (float)position * THRUSTER_DEGREES_PER_COUNT;
     return angle;
 }
 
 
-// --- Helper Functions ---
-
-// Checks if the *actual* measured angle is close to the target angle (modulo 360)
 bool isAngleWithinTolerance() {
-    float actualAngle = readThrusterEncoderAngle(); // Read the physical angle (0-360)
+    float actualAngle = readThrusterEncoderAngle(); 
     float targetAngleMod360 = fmod(receivedTargetAngle, 360.0);
     if (targetAngleMod360 < 0) {
-        targetAngleMod360 += 360.0; // Ensure positive angle
+        targetAngleMod360 += 360.0;
     }
 
     float angleDifference = abs(targetAngleMod360 - actualAngle);
     if (angleDifference > 180.0) {
-        angleDifference = 360.0 - angleDifference; // Get the shorter way around
+        angleDifference = 360.0 - angleDifference; 
     }
     return angleDifference < ANGLE_TOLERANCE_DEGREES;
 }
@@ -163,120 +148,98 @@ void updateThrusterRelay() {
     bool canEnableThrust = false;
 
     if (!peerConnected) {
-        canEnableThrust = false; // Force thruster off if disconnected
+        canEnableThrust = false; 
     } else if (receivedThrustRequest && isAngleWithinTolerance()) {
-        canEnableThrust = true; // Enable only if requested, angle correct, and connected
+        canEnableThrust = true; 
     } else {
-        canEnableThrust = false; // Disable otherwise
+        canEnableThrust = false;
     }
 
     // Update relay only if state changes
     if (canEnableThrust != currentThrustState) {
         currentThrustState = canEnableThrust;
-        digitalWrite(RELAY_PIN, currentThrustState ? HIGH : LOW); // Assuming HIGH activates relay
+        digitalWrite(RELAY_PIN, currentThrustState ? HIGH : LOW); 
         Serial.print("Thruster Relay set to: "); Serial.println(currentThrustState ? "ON" : "OFF");
     }
 }
 
-// --- JBD BMS Communication ---
+// JBD BMS Communication
 
-// Calculates the JBD checksum (sum of bytes inverted + 1)
+// Calculates the JBD checksum
 uint16_t calculateJbdChecksum(const uint8_t *buffer, int length) {
     uint16_t sum = 0;
     for (int i = 0; i < length; i++) {
         sum += buffer[i];
     }
-    uint16_t checksum = ~sum + 1; // Two's complement of the sum
+    uint16_t checksum = ~sum + 1; 
     return checksum;
 }
 
-// Sends a command to the JBD BMS and waits for a response
-// Returns the number of bytes read into responseBuffer, or 0 on error/timeout
 int sendJbdCommand(uint8_t commandCode, uint8_t *responseBuffer, int maxResponseLen) {
-    // Construct the command frame (Basic Info Read 0x03 has 0 data length)
     uint8_t cmdFrame[7];
-    cmdFrame[0] = JBD_START_BYTE;       // Start
-    cmdFrame[1] = JBD_READ_CMD;         // Read command status bit
-    cmdFrame[2] = commandCode;          // Command code (e.g., 0x03)
-    cmdFrame[3] = 0x00;                 // Data Length (0 for basic info read)
+    cmdFrame[0] = JBD_START_BYTE;    
+    cmdFrame[1] = JBD_READ_CMD;  
+    cmdFrame[2] = commandCode;        
+    cmdFrame[3] = 0x00;               
     
-    // Calculate checksum for command + length bytes
-    uint16_t checksum = calculateJbdChecksum(&cmdFrame[2], 2); // Checksum over cmd + len
-    cmdFrame[4] = (checksum >> 8) & 0xFF; // Checksum High Byte
-    cmdFrame[5] = checksum & 0xFF;        // Checksum Low Byte
-    cmdFrame[6] = JBD_END_BYTE;           // End
+    uint16_t checksum = calculateJbdChecksum(&cmdFrame[2], 2); 
+    cmdFrame[4] = (checksum >> 8) & 0xFF; 
+    cmdFrame[5] = checksum & 0xFF;   
+    cmdFrame[6] = JBD_END_BYTE;         
 
-    // Clear receive buffer before sending
+
     while (BMS_Serial.available()) {
         BMS_Serial.read();
     }
 
-    // Send the command
     BMS_Serial.write(cmdFrame, sizeof(cmdFrame));
-    // Serial.print("Sent BMS Cmd: ");
-    // for(int i=0; i<sizeof(cmdFrame); i++) { Serial.print(cmdFrame[i], HEX); Serial.print(" "); }
-    // Serial.println();
 
-    // Wait for response with timeout
+
+    
     unsigned long startTime = millis();
     int bytesRead = 0;
     while (millis() - startTime < BMS_RESPONSE_TIMEOUT_MS) {
         if (BMS_Serial.available()) {
-            // Read bytes into buffer incrementally
             while (BMS_Serial.available() && bytesRead < maxResponseLen) {
                  responseBuffer[bytesRead++] = BMS_Serial.read();
             }
-            // Check if we have at least the header and potentially the end byte
             if (bytesRead >= 4 && responseBuffer[bytesRead - 1] == JBD_END_BYTE) {
-                 break; // Likely got the full message
+                 break; 
             }
         }
-        delay(1); // Small delay to prevent busy-waiting
+        delay(1); 
     }
 
-    // Serial.print("Received BMS Resp ("); Serial.print(bytesRead); Serial.print(" bytes): ");
-    // for(int i=0; i<bytesRead; i++) { Serial.print(responseBuffer[i], HEX); Serial.print(" "); }
-    // Serial.println();
 
-    if (bytesRead < 7) { // Minimum response length: DD, CMD, STAT, LEN, DATA(0), CS_H, CS_L, 77
-        // Serial.println("BMS Response too short or timeout.");
-        return 0; // Timeout or incomplete response
+    if (bytesRead < 7) {
+        return 0;
     }
 
-    // Basic validation: Check start, end, and command echo
     if (responseBuffer[0] != JBD_START_BYTE || responseBuffer[bytesRead - 1] != JBD_END_BYTE || responseBuffer[1] != commandCode) {
         Serial.println("BMS Response frame error (start/end/cmd).");
         return 0; 
     }
 
-    // Validate status code (byte 2)
     if (responseBuffer[2] != 0x00) {
         Serial.print("BMS Response status error: 0x"); Serial.println(responseBuffer[2], HEX);
         return 0;
     }
     
-    // Validate data length
     uint8_t dataLength = responseBuffer[3];
-    if (bytesRead != dataLength + 7) { // 7 = DD, CMD, STAT, LEN, CS_H, CS_L, 77
+    if (bytesRead != dataLength + 7) { 
          Serial.println("BMS Response length mismatch.");
-         // Serial.print("Expected: "); Serial.print(dataLength + 7); Serial.print(", Got: "); Serial.println(bytesRead);
-         return 0;
+         
     }
 
-    // Validate checksum
+
     uint16_t receivedChecksum = ((uint16_t)responseBuffer[bytesRead - 3] << 8) | responseBuffer[bytesRead - 2];
-    // Checksum is calculated over: command code + status + length + data payload
-    uint16_t calculatedChecksum = calculateJbdChecksum(&responseBuffer[1], dataLength + 3); // Cmd(1)+Stat(1)+Len(1)+Data(N) = N+3 bytes
 
     if (receivedChecksum != calculatedChecksum) {
         Serial.println("BMS Response checksum error.");
-        // Serial.print("Received CS: 0x"); Serial.print(receivedChecksum, HEX);
-        // Serial.print(", Calculated CS: 0x"); Serial.println(calculatedChecksum, HEX);
         return 0;
     }
 
-    // If all checks pass, return the number of bytes read
-    return bytesRead; 
+   
 }
 
 
@@ -285,40 +248,35 @@ int getBatteryPercentageFromBMS() {
     int bytesReceived = sendJbdCommand(JBD_CMD_BASIC_INFO, bmsResponseBuffer, sizeof(bmsResponseBuffer));
 
     if (bytesReceived > 0) {
-        // Response structure for 0x03: DD 03 00 LEN DATA... CS_H CS_L 77
-        // Data payload starts at index 4
         uint8_t dataLength = bmsResponseBuffer[3];
         if (dataLength >= JBD_BASIC_INFO_RSOC_INDEX + 1) {
-            int rsoc = bmsResponseBuffer[4 + JBD_BASIC_INFO_RSOC_INDEX]; // RSOC is at index 4 (start of data) + 23
-            // Serial.print("BMS RSOC: "); Serial.println(rsoc);
-            return rsoc; // Return the percentage (0-100)
+            int rsoc = bmsResponseBuffer[4 + JBD_BASIC_INFO_RSOC_INDEX];
+            return rsoc; 
         } else {
             Serial.println("BMS Response data too short for RSOC.");
-            return -1; // Data length error
+            return -1; 
         }
     } else {
-        // Serial.println("Failed to get valid BMS response.");
-        return -1; // Indicate communication error
+        return -1; 
     }
 }
 
 void checkBattery() {
     int currentPercent = getBatteryPercentageFromBMS();
     
-    if (currentPercent >= 0) { // Check if BMS reading was valid (0-100)
+    if (currentPercent >= 0) { 
         lowBatteryState = (currentPercent < LOW_BATTERY_PERCENT_THRESHOLD);
     } else {
-        // Handle BMS read error - maybe assume low battery for safety?
         Serial.println("BMS Read Error - Assuming Low Battery");
         lowBatteryState = true; 
     }
 }
 
 
-// --- Setup ---
+
 void setup() {
     Serial.begin(115200);
-    Serial.println("ESP32 Thruster Unit Starting (v3 - JBD BMS)...");
+    Serial.println("ESP32 Thruster Unit Starting");
 
     // Initialize Stepper Motor
     stepper.setMaxSpeed(STEPPER_MAX_SPEED);
@@ -327,13 +285,13 @@ void setup() {
 
     // Initialize Relay Pin
     pinMode(RELAY_PIN, OUTPUT);
-    digitalWrite(RELAY_PIN, LOW); // Start with thruster OFF
+    digitalWrite(RELAY_PIN, LOW);
     currentThrustState = false;
     Serial.println("Relay Pin Initialized.");
 
     // Initialize SPI for Thruster Encoder
     pinMode(THRUSTER_ENC_CS_PIN, OUTPUT);
-    digitalWrite(THRUSTER_ENC_CS_PIN, HIGH); // Deselect initially
+    digitalWrite(THRUSTER_ENC_CS_PIN, HIGH);
     spiThruster.begin(THRUSTER_ENC_SCK_PIN, THRUSTER_ENC_MISO_PIN, -1, THRUSTER_ENC_CS_PIN); 
     Serial.println("SPI Initialized for Thruster Encoder.");
 
@@ -352,11 +310,9 @@ void setup() {
     }
     Serial.println("ESP-NOW Initialized.");
 
-    // Register callbacks
     esp_now_register_send_cb(OnDataSent);
     esp_now_register_recv_cb(OnDataRecv);
 
-    // Register peer
     esp_now_peer_info_t peerInfo;
     memset(&peerInfo, 0, sizeof(peerInfo));
     memcpy(peerInfo.peer_addr, CONTROLLER_MAC_ADDR, 6);
@@ -369,15 +325,13 @@ void setup() {
     }
     Serial.println("Controller Peer Added.");
 
-    lastReceiveTime = millis(); // Initialize to prevent immediate disconnect state
-    lastBmsQueryTime = millis() - BMS_QUERY_INTERVAL_MS; // Ensure first query happens soon
+    lastReceiveTime = millis(); 
+    lastBmsQueryTime = millis() - BMS_QUERY_INTERVAL_MS; 
 }
 
-// --- Main Loop ---
 void loop() {
     unsigned long now = millis();
 
-    // --- Check Connection Status ---
     noInterrupts();
     unsigned long lastRx = lastReceiveTime;
     interrupts();
@@ -386,37 +340,31 @@ void loop() {
         if (peerConnected) {
             Serial.println("Peer disconnected.");
             peerConnected = false;
-            receivedThrustRequest = false; // Ensure thruster request is off
+            receivedThrustRequest = false; 
         }
     } else {
          if (!peerConnected) {
              Serial.println("Peer connected.");
-             peerConnected = true; // Connection re-established
+             peerConnected = true; 
          }
     }
 
-    // --- Run Stepper Motor ---
     stepper.run(); 
 
-    // --- Check Battery Voltage Periodically ---
     if (now - lastBmsQueryTime > BMS_QUERY_INTERVAL_MS) {
         lastBmsQueryTime = now;
-        checkBattery(); // This calls getBatteryPercentageFromBMS
+        checkBattery();
     }
 
-    // --- Update Thruster Relay Logic ---
     updateThrusterRelay(); 
 
-    // --- Prepare Feedback Data ---
     thrusterStatus.thrust_active_feedback = currentThrustState;
     thrusterStatus.low_battery_feedback = lowBatteryState;
 
-    // --- Send Feedback Periodically ---
     if (now - lastSendTime > PING_INTERVAL_MS) {
         lastSendTime = now;
         esp_err_t result = esp_now_send(CONTROLLER_MAC_ADDR, (uint8_t *) &thrusterStatus, sizeof(thrusterStatus));
     }
     
-    // Small delay to allow background tasks
-    delay(1); 
+    delay(5); 
 }
