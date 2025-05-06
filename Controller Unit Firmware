@@ -16,16 +16,16 @@ const int LED_G_PIN = 27;
 const int LED_B_PIN = 14;
 
 // Encoder & Angle Settings
-const int ENCODER_RESOLUTION = 1024; // 10-bit encoder
+const int ENCODER_RESOLUTION = 1024; 
 const float GEAR_RATIO = 4.8; 
-const float TARGET_DEGREES_PER_COUNT = (360.0 * GEAR_RATIO) / ENCODER_RESOLUTION; // Target angle change per encoder count = 1728 / 1024 = 1.6875
+const float TARGET_DEGREES_PER_COUNT = (360.0 * GEAR_RATIO) / ENCODER_RESOLUTION; 
 
 // Communication Settings
 const unsigned long PING_INTERVAL_MS = 200;
-const unsigned long CONNECTION_TIMEOUT_MS = 2000; // Time before considering disconnected
+const unsigned long CONNECTION_TIMEOUT_MS = 2000; 
 
 // SPI Settings for Encoder
-SPISettings encoderSPISettings(1000000, MSBFIRST, SPI_MODE0); // 1 MHz, MSB first, Mode 0 (typical)
+SPISettings encoderSPISettings(1000000, MSBFIRST, SPI_MODE0); 
 
 // Global Variables
 SPIClass spi = SPIClass(VSPI);
@@ -64,28 +64,23 @@ enum LedState {
 LedState currentLedState = OFF;
 unsigned long lastLedFlashTime = 0;
 bool ledFlashOn = false;
-const int LED_FLASH_INTERVAL_MS = 250; // Flashing speed
+const int LED_FLASH_INTERVAL_MS = 250; 
 
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    // Optional: Add debug printing
-    // Serial.print("Last Packet Send Status: ");
-    // Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
 // Callback when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   if (len == sizeof(thrusterFeedback)) {
     memcpy(&thrusterFeedback, incomingData, sizeof(thrusterFeedback));
-    // Update volatile state variables safely
-    noInterrupts(); // Prevent race conditions with main loop access
+    
+    noInterrupts();
     thrusterActiveFeedback = thrusterFeedback.thrust_active_feedback;
     lowBatteryFeedback = thrusterFeedback.low_battery_feedback;
     lastReceiveTime = millis();
     peerConnected = true; 
     interrupts();
-    // Serial.print("Received - Thrust Active: "); Serial.print(thrusterActiveFeedback);
-    // Serial.print(", Low Battery: "); Serial.println(lowBatteryFeedback);
   } else {
     Serial.println("Received data of incorrect size.");
   }
@@ -115,30 +110,28 @@ void updateLed() {
         
         switch (currentLedState) {
             case OFF:
-                setLedColor(HIGH, HIGH, HIGH); // All off
+                setLedColor(HIGH, HIGH, HIGH); 
                 break;
             case GREEN:
-                setLedColor(HIGH, LOW, HIGH); // Green on
+                setLedColor(HIGH, LOW, HIGH); 
                 break;
             case SOLID_RED:
-                setLedColor(LOW, HIGH, HIGH); // Red on
+                setLedColor(LOW, HIGH, HIGH);
                 break;
             case FLASHING_RED:
-                // Handle flashing in the main loop
-                break; 
         }
     }
 
-    // Handle flashing state separately
+
     if (currentLedState == FLASHING_RED) {
         unsigned long now = millis();
         if (now - lastLedFlashTime > LED_FLASH_INTERVAL_MS) {
             lastLedFlashTime = now;
             ledFlashOn = !ledFlashOn;
             if (ledFlashOn) {
-                setLedColor(LOW, HIGH, HIGH); // Red on
+                setLedColor(LOW, HIGH, HIGH); 
             } else {
-                setLedColor(HIGH, HIGH, HIGH); // All off
+                setLedColor(HIGH, HIGH, HIGH); 
             }
         }
     }
@@ -148,11 +141,11 @@ int readSerialEncoder() {
     uint16_t rawData = 0;
     
     spi.beginTransaction(encoderSPISettings);
-    digitalWrite(ENC_CS_PIN, LOW); // Select encoder chip
+    digitalWrite(ENC_CS_PIN, LOW); 
     
-    rawData = spi.transfer16(0xFFFF); // Send dummy data to receive
+    rawData = spi.transfer16(0xFFFF); 
     
-    digitalWrite(ENC_CS_PIN, HIGH); // Deselect encoder chip
+    digitalWrite(ENC_CS_PIN, HIGH);
     spi.endTransaction();
 
     int position = rawData & 0x03FF; 
@@ -165,26 +158,26 @@ void setup() {
     Serial.begin(115200);
     Serial.println("ESP32 Thruster Controller Starting (v2)...");
 
-    // Initialize SPI for Encoder
+    
     pinMode(ENC_CS_PIN, OUTPUT);
-    digitalWrite(ENC_CS_PIN, HIGH); // Deselect initially
-    // Initialize VSPI with custom pins
-    spi.begin(ENC_SCK_PIN, ENC_MISO_PIN, -1, ENC_CS_PIN); // SCK, MISO, MOSI (-1 if unused), CS (ignored if controlled manually)
+    digitalWrite(ENC_CS_PIN, HIGH); 
+   
+    spi.begin(ENC_SCK_PIN, ENC_MISO_PIN, -1, ENC_CS_PIN);
     Serial.println("SPI Initialized for Encoder.");
 
     // Initialize Switch Pin
-    pinMode(THRUST_SWITCH_PIN, INPUT_PULLUP); // Use internal pull-up resistor
+    pinMode(THRUST_SWITCH_PIN, INPUT_PULLUP);
     Serial.println("Switch Pin Initialized.");
 
     // Initialize LED Pins
     pinMode(LED_R_PIN, OUTPUT);
     pinMode(LED_G_PIN, OUTPUT);
     pinMode(LED_B_PIN, OUTPUT);
-    setLedColor(HIGH, HIGH, HIGH); // Start with LED off
+    setLedColor(HIGH, HIGH, HIGH); 
     Serial.println("LED Pins Initialized.");
 
     // Initialize WiFi and ESP-NOW
-    WiFi.mode(WIFI_STA); // Station mode is needed for ESP-NOW
+    WiFi.mode(WIFI_STA); 
     Serial.print("Controller MAC Address: ");
     Serial.println(WiFi.macAddress());
 
@@ -198,12 +191,11 @@ void setup() {
     esp_now_register_send_cb(OnDataSent);
     esp_now_register_recv_cb(OnDataRecv);
 
-    // Register peer
     esp_now_peer_info_t peerInfo;
-    memset(&peerInfo, 0, sizeof(peerInfo)); // Zero out the structure
+    memset(&peerInfo, 0, sizeof(peerInfo));
     memcpy(peerInfo.peer_addr, THRUSTER_MAC_ADDR, 6);
-    peerInfo.channel = 0;  // Use default channel 0
-    peerInfo.encrypt = false; // No encryption for simplicity
+    peerInfo.channel = 0;  
+    peerInfo.encrypt = false;
     
     if (esp_now_add_peer(&peerInfo) != ESP_OK){
         Serial.println("Failed to add peer");
@@ -211,9 +203,9 @@ void setup() {
     }
     Serial.println("Thruster Peer Added.");
 
-    lastReceiveTime = millis(); // Initialize to prevent immediate disconnect state
+    lastReceiveTime = millis(); 
     
-    // Initial read of encoder to set starting angle
+    
     int initialEncoderValue = readSerialEncoder();
     controllerData.target_angle_degrees = (float)initialEncoderValue * TARGET_DEGREES_PER_COUNT;
     lastRawEncoderValue = initialEncoderValue;
@@ -227,27 +219,22 @@ void loop() {
 
     // Read Inputs
     int currentEncoderValue = readSerialEncoder();
-    bool currentSwitchState = (digitalRead(THRUST_SWITCH_PIN) == LOW); // LOW means switch is ON/active
+    bool currentSwitchState = (digitalRead(THRUST_SWITCH_PIN) == LOW); 
 
     // Calculate Target Angle
     // Update only if encoder value has changed
     if (currentEncoderValue != lastRawEncoderValue) {
          controllerData.target_angle_degrees = (float)currentEncoderValue * TARGET_DEGREES_PER_COUNT;
          lastRawEncoderValue = currentEncoderValue;
-         sendUpdate = true; // Need to send the new angle
-         // Serial.print("Encoder: "); Serial.print(currentEncoderValue);
-         // Serial.print(", Target Angle: "); Serial.println(controllerData.target_angle_degrees);
+         sendUpdate = true; 
     }
     
     // Update only if switch state has changed
     if (currentSwitchState != controllerData.thrust_enabled_request) {
         controllerData.thrust_enabled_request = currentSwitchState;
-        sendUpdate = true; // Need to send the new switch state
-        // Serial.print("Switch State Changed: "); Serial.println(controllerData.thrust_enabled_request);
+        sendUpdate = true; 
     }
 
-
-    // --- Check Connection Status ---
     noInterrupts();
     unsigned long lastRx = lastReceiveTime;
     interrupts();
@@ -256,7 +243,6 @@ void loop() {
         if (peerConnected) {
             Serial.println("Peer disconnected.");
             peerConnected = false;
-            // Reset feedback states when disconnected
             thrusterActiveFeedback = false; 
             lowBatteryFeedback = false; 
         }
@@ -270,17 +256,11 @@ void loop() {
     if (sendUpdate || (now - lastSendTime > PING_INTERVAL_MS)) {
         lastSendTime = now;
         esp_err_t result = esp_now_send(THRUSTER_MAC_ADDR, (uint8_t *) &controllerData, sizeof(controllerData));
-        
-        // Optional: Check send result
-        // if (result != ESP_OK) {
-        //     Serial.println("Error sending data");
-        // }
+    
     }
 
-    // --- Update LED Status ---
     updateLed();
 
-    // Small delay to prevent busy-waiting
     delay(5);
 }
 
