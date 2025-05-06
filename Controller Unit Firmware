@@ -21,18 +21,18 @@ const float GEAR_RATIO = 4.8;
 const float TARGET_DEGREES_PER_COUNT = (360.0 * GEAR_RATIO) / ENCODER_RESOLUTION; // Target angle change per encoder count = 1728 / 1024 = 1.6875
 
 // Communication Settings
-const unsigned long PING_INTERVAL_MS = 200; // Send data more frequently for responsiveness
+const unsigned long PING_INTERVAL_MS = 200;
 const unsigned long CONNECTION_TIMEOUT_MS = 2000; // Time before considering disconnected
 
-// SPI Settings for Encoder (Adjust based on your encoder datasheet)
+// SPI Settings for Encoder
 SPISettings encoderSPISettings(1000000, MSBFIRST, SPI_MODE0); // 1 MHz, MSB first, Mode 0 (typical)
 
-// --- Global Variables ---
-SPIClass spi = SPIClass(VSPI); // Use VSPI peripheral (HSPI is other option)
+// Global Variables
+SPIClass spi = SPIClass(VSPI);
 
 // Data structure to send
 typedef struct struct_message_send {
-    float target_angle_degrees; // Cumulative target angle
+    float target_angle_degrees; 
     bool thrust_enabled_request;
 } struct_message_send;
 
@@ -52,7 +52,7 @@ volatile bool lowBatteryFeedback = false;
 volatile bool peerConnected = false;
 volatile unsigned long lastReceiveTime = 0;
 unsigned long lastSendTime = 0;
-int lastRawEncoderValue = -1; // Store last reading to detect changes
+int lastRawEncoderValue = -1; 
 
 // LED States
 enum LedState {
@@ -65,8 +65,6 @@ LedState currentLedState = OFF;
 unsigned long lastLedFlashTime = 0;
 bool ledFlashOn = false;
 const int LED_FLASH_INTERVAL_MS = 250; // Flashing speed
-
-// --- ESP-NOW Callbacks --- (Identical to previous version)
 
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -93,9 +91,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   }
 }
 
-// --- LED Control --- (Identical to previous version)
-
-// Assumes Common Anode RGB LED (HIGH = OFF, LOW = ON)
+//LED Control
 void setLedColor(int r, int g, int b) {
     digitalWrite(LED_R_PIN, r);
     digitalWrite(LED_G_PIN, g);
@@ -104,8 +100,6 @@ void setLedColor(int r, int g, int b) {
 
 void updateLed() {
     LedState targetLedState = OFF;
-
-    // Determine target state based on priority: Disconnected > Low Battery > Thruster ON > Off
     if (!peerConnected) {
         targetLedState = FLASHING_RED;
     } else if (lowBatteryFeedback) {
@@ -116,7 +110,6 @@ void updateLed() {
         targetLedState = OFF;
     }
 
-    // Apply state
     if (targetLedState != currentLedState || targetLedState == FLASHING_RED) {
         currentLedState = targetLedState;
         
@@ -151,32 +144,23 @@ void updateLed() {
     }
 }
 
-// --- Serial Encoder Reading ---
-// IMPORTANT: This is a *placeholder* function. Adapt to your encoder's specific SPI protocol.
-// Assumes a simple 16-bit read where the lower 10 bits are the position data.
 int readSerialEncoder() {
     uint16_t rawData = 0;
     
     spi.beginTransaction(encoderSPISettings);
     digitalWrite(ENC_CS_PIN, LOW); // Select encoder chip
     
-    // Clock out 16 bits (adjust number of bytes/bits as needed)
-    // Some encoders might require a command byte first.
     rawData = spi.transfer16(0xFFFF); // Send dummy data to receive
     
     digitalWrite(ENC_CS_PIN, HIGH); // Deselect encoder chip
     spi.endTransaction();
 
-    // Assuming the 10-bit data is in the lower bits (adjust masking/shifting if needed)
-    int position = rawData & 0x03FF; // Mask for lower 10 bits (0 to 1023)
-
-    // Optional: Add error checking bits if your encoder provides them
+    int position = rawData & 0x03FF; 
 
     return position;
 }
 
 
-// --- Setup ---
 void setup() {
     Serial.begin(115200);
     Serial.println("ESP32 Thruster Controller Starting (v2)...");
@@ -237,16 +221,15 @@ void setup() {
     Serial.print(", Initial Target Angle: "); Serial.println(controllerData.target_angle_degrees);
 }
 
-// --- Main Loop ---
 void loop() {
     unsigned long now = millis();
     bool sendUpdate = false;
 
-    // --- Read Inputs ---
+    // Read Inputs
     int currentEncoderValue = readSerialEncoder();
     bool currentSwitchState = (digitalRead(THRUST_SWITCH_PIN) == LOW); // LOW means switch is ON/active
 
-    // --- Calculate Target Angle ---
+    // Calculate Target Angle
     // Update only if encoder value has changed
     if (currentEncoderValue != lastRawEncoderValue) {
          controllerData.target_angle_degrees = (float)currentEncoderValue * TARGET_DEGREES_PER_COUNT;
@@ -265,7 +248,6 @@ void loop() {
 
 
     // --- Check Connection Status ---
-    // Safely read volatile variable
     noInterrupts();
     unsigned long lastRx = lastReceiveTime;
     interrupts();
@@ -281,13 +263,10 @@ void loop() {
     } else {
         if (!peerConnected) {
              Serial.println("Peer connected.");
-             peerConnected = true; // Connection re-established
+             peerConnected = true; 
         }
     }
 
-
-    // --- Send Data Periodically or on Change ---
-    // Send immediately if inputs changed, otherwise send periodically to maintain connection status
     if (sendUpdate || (now - lastSendTime > PING_INTERVAL_MS)) {
         lastSendTime = now;
         esp_err_t result = esp_now_send(THRUSTER_MAC_ADDR, (uint8_t *) &controllerData, sizeof(controllerData));
@@ -301,7 +280,7 @@ void loop() {
     // --- Update LED Status ---
     updateLed();
 
-    // Small delay to prevent busy-waiting, adjust as needed
-    delay(5); // Reduce delay slightly for faster response
+    // Small delay to prevent busy-waiting
+    delay(5);
 }
 
